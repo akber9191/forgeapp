@@ -28,8 +28,8 @@ self.addEventListener('install', (event) => {
       caches.open(RUNTIME_CACHE)
     ]).then(() => {
       console.log('Service Worker: Installation complete');
-      // Force the waiting service worker to become the active service worker
-      return self.skipWaiting();
+      // Don't auto-skip waiting - let the user decide when to update
+      // self.skipWaiting() will be called via message from PWAInstall component
     }).catch((error) => {
       console.error('Service Worker: Installation failed:', error);
     })

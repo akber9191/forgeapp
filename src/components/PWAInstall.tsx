@@ -23,6 +23,53 @@ const PWAInstall = () => {
   const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const { toast } = useToast();
 
+  // Define handleUpdate function first
+  const handleUpdate = async () => {
+    if (!swRegistration) {
+      console.log('No service worker registration found');
+      window.location.reload();
+      return;
+    }
+    
+    setIsUpdating(true);
+    
+    try {
+      // If there's a waiting service worker, tell it to skip waiting
+      if (swRegistration.waiting) {
+        console.log('Telling waiting service worker to skip waiting');
+        swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        
+        // Wait for the new service worker to take control
+        await new Promise<void>((resolve) => {
+          const handleControllerChange = () => {
+            console.log('Service worker controller changed');
+            navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+            resolve();
+          };
+          navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+          
+          // Fallback timeout in case controllerchange doesn't fire
+          setTimeout(() => {
+            navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+            resolve();
+          }, 5000);
+        });
+      }
+      
+      console.log('Reloading page to use new service worker');
+      // Reload the page to use the new service worker
+      window.location.reload();
+    } catch (error) {
+      console.error('Update failed:', error);
+      setIsUpdating(false);
+      toast({
+        title: "Update Failed",
+        description: "Please try refreshing the page manually.",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     // Check if app is already installed
     const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
@@ -136,37 +183,6 @@ const PWAInstall = () => {
       setDeferredPrompt(null);
     } catch (error) {
       console.error('Install prompt failed:', error);
-    }
-  };
-
-  const handleUpdate = async () => {
-    if (!swRegistration || !swRegistration.waiting) return;
-    
-    setIsUpdating(true);
-    
-    try {
-      // Tell the waiting service worker to skip waiting
-      swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      
-      // Wait for the new service worker to take control
-      await new Promise<void>((resolve) => {
-        const handleControllerChange = () => {
-          navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
-          resolve();
-        };
-        navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
-      });
-      
-      // Reload the page to use the new service worker
-      window.location.reload();
-    } catch (error) {
-      console.error('Update failed:', error);
-      setIsUpdating(false);
-      toast({
-        title: "Update Failed",
-        description: "Please try refreshing the page manually.",
-        variant: "destructive",
-      });
     }
   };
 
