@@ -1,16 +1,16 @@
 
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Dumbbell, Beef, Activity, BarChart3 } from "lucide-react";
+import { Home, Dumbbell, Beef, Activity, BarChart3, Library, FileText } from "lucide-react";
 
 export const Navigation = () => {
   const location = useLocation();
 
   const navItems = [
     { path: "/", icon: Home, label: "Dashboard" },
-    { path: "/workout/a", icon: Dumbbell, label: "Workouts" },
+    { path: "/templates", icon: FileText, label: "Templates" },
+    { path: "/exercises", icon: Library, label: "Exercises" },
     { path: "/history", icon: BarChart3, label: "History" },
     { path: "/protein", icon: Beef, label: "Protein" },
-    { path: "/steps", icon: Activity, label: "Steps" },
   ];
 
   return (

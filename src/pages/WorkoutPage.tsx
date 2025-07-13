@@ -1,11 +1,18 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Clock, RotateCcw, Check, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, Clock, RotateCcw, Check, Plus, Trash2, X, Info, Dumbbell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { workoutTemplates } from "@/data/workouts";
+import { 
+  WorkoutTemplate as NewWorkoutTemplate, 
+  exerciseDatabase, 
+  Exercise 
+} from "@/data/exerciseDatabase";
+import ExerciseDetail from "@/components/ExerciseDetail";
 import { useToast } from "@/hooks/use-toast";
 import { SetInput } from "@/components/SetInput";
 import { VolumeStats } from "@/components/VolumeStats";
@@ -35,10 +42,18 @@ interface EnhancedWorkoutSession {
   lastActiveTime?: number;
 }
 
+// Custom templates storage key
+const CUSTOM_TEMPLATES_KEY = 'forge-custom-workout-templates';
+
 const WorkoutPage = () => {
   const { workoutId } = useParams();
   const { toast } = useToast();
-  const workout = workoutTemplates.find(w => w.id === workoutId);
+  
+  // State for workout template (could be old or new format)
+  const [workout, setWorkout] = useState<any>(null);
+  const [newTemplate, setNewTemplate] = useState<NewWorkoutTemplate | null>(null);
+  const [isNewTemplate, setIsNewTemplate] = useState(false);
+  const [selectedExerciseDetail, setSelectedExerciseDetail] = useState<Exercise | null>(null);
 
   const [workoutStarted, setWorkoutStarted] = useState(false);
   const [workoutTime, setWorkoutTime] = useState(0);
@@ -48,6 +63,85 @@ const WorkoutPage = () => {
   const [notes, setNotes] = useState('');
   const [currentUnit, setCurrentUnit] = useState<WeightUnit>(() => getUserPreferredUnit());
   const [selectedExerciseIndex, setSelectedExerciseIndex] = useState<number>(0);
+
+  // Load workout template on component mount
+  useEffect(() => {
+    const loadWorkout = async () => {
+      if (!workoutId) return;
+
+      // Initialize exercise database
+      await exerciseDatabase.loadExercises();
+
+      // First try to find in new templates (custom templates)
+      try {
+        const customTemplatesData = localStorage.getItem(CUSTOM_TEMPLATES_KEY);
+        const customTemplates: NewWorkoutTemplate[] = customTemplatesData 
+          ? JSON.parse(customTemplatesData) 
+          : [];
+
+        const foundNewTemplate = customTemplates.find(t => t.id === workoutId);
+        if (foundNewTemplate) {
+          setNewTemplate(foundNewTemplate);
+          setIsNewTemplate(true);
+          return;
+        }
+      } catch (error) {
+        console.error('Error loading custom templates:', error);
+      }
+
+      // Convert old templates to new format for consistent handling
+      const foundOldWorkout = workoutTemplates.find(w => w.id === workoutId);
+      if (foundOldWorkout) {
+        // Convert to new template format
+        const convertedTemplate: NewWorkoutTemplate = {
+          id: foundOldWorkout.id,
+          name: foundOldWorkout.name,
+          description: `${foundOldWorkout.exercises.length} exercise kettlebell workout`,
+          category: 'strength',
+          difficulty: 'intermediate',
+          estimatedDuration: foundOldWorkout.exercises.length * 12,
+          equipment: ['kettlebell'],
+          exercises: foundOldWorkout.exercises.map((ex, index) => {
+            // Try to find matching exercise in database
+            const exerciseResults = exerciseDatabase.searchExercises({
+              searchTerm: ex.name
+            });
+            
+            const matchingExercise = exerciseResults.exercises.find(dbEx => 
+              dbEx.name.toLowerCase() === ex.name.toLowerCase() ||
+              dbEx.alternativeNames.some(alt => alt.toLowerCase() === ex.name.toLowerCase())
+            );
+
+            return {
+              exerciseId: matchingExercise?.id || `legacy_${ex.name.toLowerCase().replace(/\s+/g, '_')}`,
+              order: index + 1,
+              targetSets: ex.sets,
+              targetReps: ex.reps,
+              notes: ex.notes,
+              originalName: ex.name // Store original name for fallback
+            };
+          }),
+          tags: ['kettlebell', 'strength', 'featured'],
+          isCustom: false,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        setNewTemplate(convertedTemplate);
+        setIsNewTemplate(true);
+        return;
+      }
+
+      // If not found anywhere
+      toast({
+        title: "Workout not found",
+        description: "The requested workout template could not be found.",
+        variant: "destructive",
+      });
+    };
+
+    loadWorkout();
+  }, [workoutId, toast]);
 
   // Load active session on component mount
   useEffect(() => {
@@ -152,15 +246,34 @@ const WorkoutPage = () => {
   }, [restActive, restTime, toast, currentSession]);
 
   const startWorkout = () => {
+    let exercises: any[] = [];
+    let workoutName = '';
+
+    if (newTemplate) {
+      // Handle template format (both new and converted old templates)
+      exercises = newTemplate.exercises.map(workoutExercise => {
+        const exerciseData = exerciseDatabase.getExerciseById(workoutExercise.exerciseId);
+        // Use database name if available, otherwise use originalName (for legacy), or fallback
+        const exerciseName = exerciseData?.name || (workoutExercise as any).originalName || 'Unknown Exercise';
+        
+        return {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2)}`,
+          name: exerciseName,
+          sets: [],
+          totalVolume: 0,
+          exerciseId: exerciseData ? workoutExercise.exerciseId : undefined, // Only set if we have valid exercise data
+          targetSets: workoutExercise.targetSets,
+          targetReps: workoutExercise.targetReps,
+          notes: workoutExercise.notes
+        };
+      });
+      workoutName = newTemplate.name;
+    }
+
     const session: EnhancedWorkoutSession = {
       workoutId: workoutId!,
       startTime: Date.now(),
-      exercises: workout?.exercises.map(exercise => ({
-        id: `${Date.now()}-${Math.random().toString(36).substr(2)}`,
-        name: exercise.name,
-        sets: [],
-        totalVolume: 0
-      })) || [],
+      exercises,
       notes: ''
     };
 
@@ -168,7 +281,7 @@ const WorkoutPage = () => {
     setWorkoutStarted(true);
     toast({
       title: "Workout Started!",
-      description: `Let's forge some strength with ${workout?.name}`
+      description: `Let's forge some strength with ${workoutName}`
     });
   };
 
@@ -236,11 +349,13 @@ const WorkoutPage = () => {
   };
 
   const finishWorkout = () => {
-    if (!currentSession || !workout) return;
+    if (!currentSession) return;
+
+    const workoutName = newTemplate?.name || 'Unknown Workout';
 
     // Save to workout history
     const completedWorkout = saveCompletedWorkout(
-      workout.name,
+      workoutName,
       currentSession.exercises,
       currentSession.startTime,
       Date.now(),
@@ -290,13 +405,31 @@ const WorkoutPage = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (!workout) {
+  // Helper function to get exercise detail info
+  const getExerciseDetail = (exerciseId?: string): Exercise | null => {
+    if (!exerciseId) return null;
+    return exerciseDatabase.getExerciseById(exerciseId) || null;
+  };
+
+  // Helper function to show exercise details
+  const handleShowExerciseDetail = (exerciseData?: any) => {
+    if (exerciseData?.exerciseId) {
+      const detail = getExerciseDetail(exerciseData.exerciseId);
+      if (detail) {
+        setSelectedExerciseDetail(detail);
+      }
+    }
+  };
+
+  if (!newTemplate) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">Workout not found</p>
+        <p className="text-muted-foreground">Loading workout...</p>
       </div>
     );
   }
+
+  const currentWorkoutName = newTemplate.name;
 
   return (
     <div className="pb-20 px-4 pt-6 space-y-6">
@@ -305,7 +438,7 @@ const WorkoutPage = () => {
         <Link to="/" className="p-2 hover:bg-muted rounded-lg transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </Link>
-        <h1 className="text-2xl font-bold">{workout.name}</h1>
+        <h1 className="text-2xl font-bold">{currentWorkoutName}</h1>
         <UnitToggle size="sm" />
       </div>
 
@@ -415,16 +548,30 @@ const WorkoutPage = () => {
             
             {/* Exercise Selector */}
             <div className="flex flex-wrap gap-2">
-              {currentSession.exercises.map((exercise, index) => (
-                <Badge
-                  key={exercise.id}
-                  variant={selectedExerciseIndex === index ? "default" : "secondary"}
-                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                  onClick={() => setSelectedExerciseIndex(index)}
-                >
-                  {exercise.name} ({exercise.sets.length})
-                </Badge>
-              ))}
+              {currentSession.exercises.map((exercise, index) => {
+                const exerciseDetail = getExerciseDetail(exercise.exerciseId);
+                return (
+                  <div key={exercise.id} className="flex items-center gap-1">
+                    <Badge
+                      variant={selectedExerciseIndex === index ? "default" : "secondary"}
+                      className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                      onClick={() => setSelectedExerciseIndex(index)}
+                    >
+                      {exercise.name} ({exercise.sets.length})
+                    </Badge>
+                    {exerciseDetail && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => setSelectedExerciseDetail(exerciseDetail)}
+                      >
+                        <Info className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </CardHeader>
           
@@ -448,9 +595,36 @@ const WorkoutPage = () => {
               <Card key={exercise.id}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{exercise.name}</CardTitle>
-                    <div className="text-sm text-muted-foreground">
-                      {formatVolume(convertWeight(exercise.totalVolume, 'kg', currentUnit), currentUnit)}
+                    <div className="flex-1">
+                      <CardTitle className="text-lg">{exercise.name}</CardTitle>
+                      {/* Show target sets/reps for new templates */}
+                      {exercise.targetSets && exercise.targetReps && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Target: {exercise.targetSets} sets × {exercise.targetReps} reps
+                        </div>
+                      )}
+                      {exercise.notes && (
+                        <div className="text-sm text-gray-600 mt-1 italic">
+                          {exercise.notes}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm text-muted-foreground">
+                        {formatVolume(convertWeight(exercise.totalVolume, 'kg', currentUnit), currentUnit)}
+                      </div>
+                      {exercise.exerciseId && getExerciseDetail(exercise.exerciseId) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const detail = getExerciseDetail(exercise.exerciseId);
+                            if (detail) setSelectedExerciseDetail(detail);
+                          }}
+                        >
+                          <Dumbbell className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -528,6 +702,21 @@ const WorkoutPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Exercise Detail Dialog */}
+      <Dialog 
+        open={!!selectedExerciseDetail} 
+        onOpenChange={(open) => !open && setSelectedExerciseDetail(null)}
+      >
+        <DialogContent className="max-w-4xl h-[90vh] p-0">
+          {selectedExerciseDetail && (
+            <ExerciseDetail
+              exercise={selectedExerciseDetail}
+              onClose={() => setSelectedExerciseDetail(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

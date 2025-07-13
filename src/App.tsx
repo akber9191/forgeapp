@@ -9,6 +9,8 @@ import WorkoutPage from "./pages/WorkoutPage";
 import ProteinPage from "./pages/ProteinPage";
 import StepsPage from "./pages/StepsPage";
 import HistoryPage from "./pages/HistoryPage";
+import ExerciseLibrary from "./pages/ExerciseLibrary";
+import WorkoutTemplates from "./pages/WorkoutTemplates";
 import NotFound from "./pages/NotFound";
 import { Navigation } from "./components/Navigation";
 import PWAInstall from "./components/PWAInstall";
@@ -28,9 +30,11 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/workout/:workoutId" element={<WorkoutPage />} />
+              <Route path="/templates" element={<WorkoutTemplates />} />
+              <Route path="/exercises" element={<ExerciseLibrary />} />
+              <Route path="/history" element={<HistoryPage />} />
               <Route path="/protein" element={<ProteinPage />} />
               <Route path="/steps" element={<StepsPage />} />
-              <Route path="/history" element={<HistoryPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Navigation />
