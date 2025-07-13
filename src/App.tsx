@@ -26,17 +26,19 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <div className="min-h-screen bg-background flex flex-col">
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/workout/:workoutId" element={<WorkoutPage />} />
-              <Route path="/templates" element={<WorkoutTemplates />} />
-              <Route path="/exercises" element={<ExerciseLibrary />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/protein" element={<ProteinPage />} />
-              <Route path="/steps" element={<StepsPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+          <div className="h-screen bg-background flex flex-col">
+            <div className="flex-1 overflow-hidden">
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/workout/:workoutId" element={<WorkoutPage />} />
+                <Route path="/templates" element={<WorkoutTemplates />} />
+                <Route path="/exercises" element={<ExerciseLibrary />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/protein" element={<ProteinPage />} />
+                <Route path="/steps" element={<StepsPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </div>
             <Navigation />
             <PWAInstall />
           </div>

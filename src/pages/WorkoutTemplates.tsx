@@ -727,7 +727,8 @@ const WorkoutTemplates: React.FC = () => {
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 p-4">
+          <ScrollArea className="flex-1">
+            <div className="p-4">
             {filteredTemplates.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredTemplates.map((template) => (
@@ -768,7 +769,8 @@ const WorkoutTemplates: React.FC = () => {
                 </CardContent>
               </Card>
             )}
-          </div>
+            </div>
+          </ScrollArea>
         </Tabs>
       </div>
 
